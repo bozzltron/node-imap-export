@@ -41,9 +41,11 @@ process.argv.forEach(function (val, index, array) {
 
 // setup an event listener when the parsing finishes
 mailparser.on("end", function(mail_object){
-    console.log("From:", mail_object.from); //[{address:'sender@example.com',name:'Sender Name'}]
-    console.log("Subject:", mail_object.subject); // Hello world!
-    console.log("Text body:", mail_object.text); // How are you today?
+    console.log('headers', mail_object.headers.date);
+
+    // Write to the file
+    var string = [safeString(mail_object.headers.date), parseEmails(mail_object.from), parseEmails(mail_object.to), safeString(mail_object.subject), safeString(mail_object.text)].join(', ') + ', \n';
+    csv.write(string);    
 });
 
 // Setup file stream
@@ -73,9 +75,14 @@ function safeString(str) {
 }
 
 // Parse email
-function parseEmail(str){
-	var ary = str.split(' ');
-	return ary[ary.length - 1];
+function parseEmails(ary){
+  console.log(ary);
+	var addresses = [];
+	ary.forEach(function(item) {
+		addresses.push(item.address);
+	})
+	console.log('addresses', addresses);
+	return addresses.length > 0 ? addresses.join(' ') : '';
 }
 
 var Email = {
@@ -96,33 +103,33 @@ imap.connect(function(err){
 			if(!err){
 
 				// Get Messages
-				imap.search([ 'All', ['SINCE', 'August 1, 2012'] ], function(err, results){
-
-					// Fetch Data
-			    var fetch = imap.fetch(results, { request: { headers:false, body:'full' } });
-			    fetch.on('message', function(msg) {
-
-			      msg.on('end', function() {
-
-			      	// send the email source to the parser
-							mailparser.write(msg);
-							mailparser.end();
-
-			        // Write to the file
-			        // var headers = msg.headers;
-			        // var string = [safeString(headers.date[0]), Email.parse(headers.from[0]).join(' '), Email.parse(headers.to[0]).join(' '), safeString(headers.subject[0]), safeString('body')].join(', ') + ', \n';
-			        // csv.write(string);
-
-			      });
-
-			    });
-
-			    fetch.on('end', function() {
-			      console.log('Done fetching all messages!');
-			      imap.logout(function(){});
-			    });
-
-				});
+        imap.search([ 'ALL', ['SINCE', 'August 20, 2000'] ], function(err, results) {
+          if (err) die(err);
+          var fetch = imap.fetch(results, {
+            request: {
+              headers: false,
+              body: 'full'
+            }
+          });
+          fetch.on('message', function(msg) {
+          	var email = "";
+            console.log('Got a message with sequence number ' + msg.seqno);
+            //fileStream = fs.createWriteStream('msg-' + msg.seqno + '-raw.txt');
+            msg.on('data', function(chunk) {
+              //fileStream.write(chunk);
+              email += chunk;
+            });
+            msg.on('end', function() {
+              //fileStream.end();
+              mailparser.write(email);
+              mailparser.end();
+            });
+          });
+          fetch.on('end', function() {
+            console.log('Done fetching all messages!');
+            imap.logout();
+          });
+        });
 
 			}
 
